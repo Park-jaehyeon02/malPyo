@@ -17,17 +17,13 @@
 
 ## 목차
 
-[
+[1. 문제 정의](#1문제-정의)
 
-1. 문제 정의](#1문제-정의)
-
-[
-
-1. 해결방안](#2해결방안)
+[1. 해결방안](#2해결방안)
 
 ## 1.문제 정의
 
-[전주MBC 자료](https://www.youtube.com/watch?v=xGOSdfRZlWw)
+[![전주MBC 자료](http://img.youtube.com/vi/xGOSdfRZlWw/0.jpg)](https://www.youtube.com/watch?v=xGOSdfRZlWw)
 
 
 
