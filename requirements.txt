@@ -1,0 +1,36 @@
+# ============================================================
+# 말표 (Mal-Pyo) — 의존성 목록
+# RTX 5080 GPU 로컬 구동 기준
+# ============================================================
+
+# --- 핵심 프레임워크 ---
+streamlit>=1.40.0
+streamlit-webrtc>=0.47.0
+
+# --- STT: faster-whisper (GPU) ---
+faster-whisper>=1.1.0
+# CUDA 12.x 환경에서 ctranslate2가 자동 설치됨
+
+# --- TTS: MeloTTS (로컬 GPU) ---
+# MeloTTS는 pip 설치 후 추가 설정 필요 (README 참조)
+# pip install git+https://github.com/myshell-ai/MeloTTS.git
+
+# --- TTS: pyttsx3 (오프라인 폴백) ---
+pyttsx3>=2.90
+
+# --- LLM: OpenAI GPT-4o (기본) ---
+openai>=1.50.0
+
+# --- LLM: 로컬 옵션 ---
+# ollama 사용 시: requests만 필요 (아래 포함)
+# llama-cpp-python 사용 시:
+# CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python
+requests>=2.32.0
+
+# --- 오디오 처리 ---
+numpy>=1.26.0
+soundfile>=0.12.0
+PyAudio>=0.2.14
+
+# --- 환경 변수 ---
+python-dotenv>=1.0.0
