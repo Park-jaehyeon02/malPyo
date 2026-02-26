@@ -13,7 +13,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from stt_engine import STTEngine
+from engine import MalPyoEngine
 
 logger = logging.getLogger("malpyo.app")
 
@@ -56,22 +56,11 @@ PRICE_MAP = {
 DEFAULT_PRICE = 15000
 
 # ─────────────────────────────────────────────────────────────
-# STT 엔진 (세션 간 공유, 1회만 로드)
+# 파이프라인 엔진 (세션 간 공유, 1회만 로드)
 # ─────────────────────────────────────────────────────────────
 @st.cache_resource
-def get_stt_engine() -> STTEngine:
-    return STTEngine()
-
-
-def run_stt(audio_bytes: bytes) -> str:
-    """녹음된 WAV 바이트를 STT로 변환하여 텍스트를 반환한다."""
-    try:
-        engine = get_stt_engine()
-        result = engine.transcribe(audio_bytes)
-        return result.text.strip()
-    except Exception as e:
-        logger.error("STT 처리 실패: %s", e)
-        return f"[STT 오류] {e}"
+def get_engine() -> MalPyoEngine:
+    return MalPyoEngine()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -108,6 +97,8 @@ DEFAULTS: dict = {
     "mode": MODE_SELECT,      # 현재 모드
     "voice_phase": VOICE_IDLE,
     "recognized_text": "",
+    "reply_text": "",          # LLM 응답 텍스트
+    "reply_audio": None,       # TTS 음성 bytes
     "page": PAGE_BOOKING,
     "sel_departure": "선택",
     "sel_arrival": "선택",
@@ -115,7 +106,7 @@ DEFAULTS: dict = {
     "sel_passengers": 1,
     "sel_discounts": ["normal"],
     "sel_payment": None,
-    "widget_key_version": 0,  # 음성 인식 후 위젯 갱신용
+    "widget_key_version": 0,
 }
 for _k, _v in DEFAULTS.items():
     if _k not in st.session_state:
@@ -322,10 +313,48 @@ def get_voice_guide() -> tuple[str, str]:
 
 
 def process_voice_result(audio_bytes: bytes):
-    """녹음된 오디오를 STT로 변환하고 인식 결과를 세션에 저장한다."""
-    recognized = run_stt(audio_bytes)
-    st.session_state.recognized_text = recognized
+    """녹음된 오디오를 파이프라인(STT→LLM→TTS)으로 처리한다."""
+    page = st.session_state.page
+    context = {"passengers": st.session_state.sel_passengers}
+
+    engine = get_engine()
+    result = engine.process(audio_bytes, page, context)
+
+    st.session_state.recognized_text = result.recognized_text
+    st.session_state.reply_text = result.reply_text
+    st.session_state.reply_audio = result.reply_audio
     st.session_state.widget_key_version += 1
+
+    if not result.success:
+        return
+
+    parsed = result.parsed
+
+    # 페이지별로 파싱된 데이터를 폼에 반영
+    if page == PAGE_BOOKING:
+        if parsed.get("departure") and parsed["departure"] in CITIES:
+            st.session_state.sel_departure = parsed["departure"]
+        if parsed.get("arrival") and parsed["arrival"] in CITIES:
+            st.session_state.sel_arrival = parsed["arrival"]
+        if parsed.get("time") and parsed["time"] in TIME_SLOTS:
+            st.session_state.sel_time = parsed["time"]
+        if parsed.get("passengers"):
+            pax = int(parsed["passengers"])
+            st.session_state.sel_passengers = max(1, min(9, pax))
+            st.session_state.sel_discounts = ["normal"] * st.session_state.sel_passengers
+
+    elif page == PAGE_DISCOUNT:
+        if parsed.get("discounts"):
+            pax = st.session_state.sel_passengers
+            valid_ids = [d["id"] for d in DISCOUNTS]
+            discounts = [d if d in valid_ids else "normal" for d in parsed["discounts"]]
+            st.session_state.sel_discounts = (discounts + ["normal"] * pax)[:pax]
+
+    elif page == PAGE_PAYMENT:
+        if parsed.get("payment"):
+            valid_ids = [p["id"] for p in PAYMENTS]
+            if parsed["payment"] in valid_ids:
+                st.session_state.sel_payment = parsed["payment"]
 
 
 def render_voice_bar():
@@ -370,18 +399,36 @@ def render_voice_bar():
         st.rerun()
 
     elif phase == VOICE_DONE:
+        recognized = st.session_state.recognized_text
+        reply = st.session_state.get("reply_text", "")
+        reply_audio = st.session_state.get("reply_audio")
+
         col_bar, col_btn = st.columns([5, 2])
         with col_bar:
-            text = st.session_state.recognized_text
+            # 내가 한 말
             st.markdown(
                 f"""<div class="voice-bar"><div class="vb-icon">🎤</div>
                 <div><div class="vb-sub">🗣️ 내가 한 말</div>
-                <div class="vb-bubble"><span class="vb-bubble-text">"{text}"</span></div></div></div>""",
+                <div class="vb-bubble"><span class="vb-bubble-text">"{recognized}"</span></div></div></div>""",
                 unsafe_allow_html=True,
             )
+            # AI 응답 텍스트
+            if reply:
+                st.markdown(
+                    f"""<div class="voice-bar" style="border-color:rgba(52,211,153,.3)">
+                    <div class="vb-icon" style="background:linear-gradient(135deg,#059669,#34D399)">🤖</div>
+                    <div><div class="vb-sub" style="color:#34D399!important">🤖 말표 응답</div>
+                    <div class="vb-bubble" style="background:rgba(5,150,105,.1);border-color:rgba(52,211,153,.25)">
+                    <span class="vb-bubble-text" style="color:#A7F3D0!important">{reply}</span></div></div></div>""",
+                    unsafe_allow_html=True,
+                )
         with col_btn:
             st.markdown("<div style='padding-top:0.3rem'></div>", unsafe_allow_html=True)
             st.button("🎤 다시 말하기", on_click=handle_voice_reset, key="btn_mic_r", use_container_width=True)
+
+        # TTS 음성 자동 재생
+        if reply_audio:
+            st.audio(reply_audio, format="audio/wav", autoplay=True)
 
 
 # ─────────────────────────────────────────────────────────────

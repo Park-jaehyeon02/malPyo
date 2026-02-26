@@ -9,11 +9,12 @@ streamlit>=1.40.0
 # --- STT: faster-whisper (GPU) ---
 faster-whisper>=1.1.0
 
-# --- LLM: Ollama (로컬 서버 통신용) ---
+# --- LLM: Ollama (로컬 서버 통신) ---
 requests>=2.32.0
 
-# --- 오디오 처리 ---
-numpy>=1.26.0
+# --- TTS: pyttsx3 (오프라인) ---
+pyttsx3>=2.90
 
-# --- 환경 변수 ---
+# --- 공통 ---
+numpy>=1.26.0
 python-dotenv>=1.0.0
