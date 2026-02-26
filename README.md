@@ -19,7 +19,7 @@
 [2. 해결방안](#2해결방안)
 
 ## 1.문제 정의
-[전주MBC 자료](https://www.youtube.com/watch?v=xGOSdfRZlWw)
+[![전주MBC 자료](http://img.youtube.com/vi/xGOSdfRZlWw/0.jpg)](https://www.youtube.com/watch?v=xGOSdfRZlWw)
 기존 키오스크는 사용자가 기계의 '동선(UI)'을 학습해야 함. 시력이 안 좋거나 기계가 낯선 분들에게는 이 과정이 큰 장벽임.
 
 
