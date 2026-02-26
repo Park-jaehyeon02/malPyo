@@ -1,0 +1,321 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+
+/* ── 리셋 ── */
+header[data-testid="stHeader"], footer, #MainMenu { display:none!important; }
+[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none!important; }
+
+/* ── 배경 ── */
+.stApp {
+    background: linear-gradient(170deg, #0B1120 0%, #111827 50%, #0F172A 100%) !important;
+}
+section.main > div.block-container {
+    padding: 0.5rem 2rem 1rem 2rem !important;
+    max-width: 960px !important;
+}
+
+/* ── 타이포그래피 ── */
+html, body, .stApp, .stApp p, .stApp span, .stApp div, .stApp label {
+    color: #E2E8F0 !important;
+    font-family: 'Noto Sans KR',sans-serif !important;
+}
+
+/* ── 상단 음성 바 (슬림) ── */
+.voice-bar {
+    background: rgba(30,41,59,0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: 16px;
+    padding: 0.6rem 1.2rem;
+    display: flex; align-items: center; gap: 1rem;
+    margin-bottom: 0.6rem;
+}
+.vb-icon {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: linear-gradient(135deg,#3B82F6,#6366F1);
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; flex-shrink:0;
+    animation: vb-glow 2.5s ease-in-out infinite;
+}
+@keyframes vb-glow {
+    0%,100%{box-shadow:0 0 10px rgba(59,130,246,.2)}
+    50%{box-shadow:0 0 25px rgba(99,102,241,.45)}
+}
+.vb-text { font-size:1.15rem; color:#F1F5F9!important; font-weight:700; }
+.vb-sub { font-size:0.85rem; color:#94A3B8!important; }
+.vb-wave { display:flex; align-items:center; gap:4px; height:30px; }
+.vb-bar {
+    width:4px; border-radius:2px;
+    background:linear-gradient(180deg,#60A5FA,#3B82F6);
+    animation: vb-bounce 1s ease-in-out infinite;
+}
+.vb-bar:nth-child(1){height:8px;animation-delay:0s}
+.vb-bar:nth-child(2){height:14px;animation-delay:.08s}
+.vb-bar:nth-child(3){height:22px;animation-delay:.16s}
+.vb-bar:nth-child(4){height:28px;animation-delay:.24s}
+.vb-bar:nth-child(5){height:22px;animation-delay:.32s}
+.vb-bar:nth-child(6){height:14px;animation-delay:.40s}
+.vb-bar:nth-child(7){height:8px;animation-delay:.48s}
+@keyframes vb-bounce {
+    0%,100%{transform:scaleY(.3);opacity:.4}
+    50%{transform:scaleY(1);opacity:1}
+}
+.vb-bubble {
+    background:rgba(59,130,246,.1); border:1px solid rgba(96,165,250,.25);
+    border-radius:10px; padding:0.3rem 0.8rem; margin-top:0.2rem; display:inline-block;
+}
+.vb-bubble-text { font-size:1.05rem; color:#BFDBFE!important; font-weight:600; }
+.processing-badge {
+    font-size:1.1rem; color:#60A5FA!important; font-weight:700;
+    animation: proc-blink 1.2s infinite;
+}
+@keyframes proc-blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+/* ── 메인 카드 (코레일 스타일 예매 영역) ── */
+.booking-card {
+    background: rgba(30,41,59,0.5);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(71,85,105,0.4);
+    border-radius: 20px;
+    padding: 1.6rem 2rem;
+    margin: 0.3rem 0;
+}
+.card-title {
+    font-size: 1.3rem; font-weight: 900; color: #F1F5F9 !important;
+    margin-bottom: 1rem; display:flex; align-items:center; gap:0.5rem;
+}
+.card-title-badge {
+    font-size:0.75rem; background:#3B82F6; color:#fff!important;
+    padding:0.15rem 0.6rem; border-radius:20px; font-weight:700;
+}
+
+/* ── 스텝 인디케이터 ── */
+.steps {
+    display:flex; justify-content:center; gap:0.5rem;
+    margin-bottom:0.8rem;
+}
+.step {
+    display:flex; align-items:center; gap:0.3rem;
+    font-size:0.85rem; font-weight:700; color:#475569!important;
+}
+.step.active { color:#3B82F6!important; }
+.step.done { color:#34D399!important; }
+.step-dot {
+    width:28px; height:28px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.8rem; font-weight:900;
+    background:rgba(71,85,105,0.4); color:#64748B!important;
+    border:2px solid #334155;
+}
+.step.active .step-dot {
+    background:linear-gradient(135deg,#3B82F6,#2563EB);
+    color:#fff!important; border-color:#60A5FA;
+    box-shadow:0 0 12px rgba(59,130,246,.3);
+}
+.step.done .step-dot {
+    background:#059669; color:#fff!important; border-color:#34D399;
+}
+.step-line {
+    width:40px; height:2px; background:#334155;
+    margin:0 0.2rem; border-radius:1px;
+}
+.step-line.done { background:#059669; }
+.step-line.active { background:#3B82F6; }
+
+/* ── 폼 라벨 ── */
+.field-label {
+    font-size:0.9rem; font-weight:700; color:#94A3B8!important;
+    margin-bottom:0.2rem; letter-spacing:0.03em;
+}
+
+/* ── Selectbox 오버라이드 ── */
+.stSelectbox > div > div {
+    background: rgba(15,23,42,0.8) !important;
+    border: 2px solid rgba(71,85,105,0.5) !important;
+    border-radius: 12px !important;
+    color: #F1F5F9 !important;
+    font-size: 1.2rem !important;
+    font-weight: 700 !important;
+    min-height: 50px !important;
+}
+.stSelectbox > div > div:hover {
+    border-color: rgba(59,130,246,0.5) !important;
+}
+.stSelectbox label { display:none !important; }
+
+/* ── Number Input 오버라이드 ── */
+.stNumberInput > div > div > input {
+    background: rgba(15,23,42,0.8) !important;
+    border: 2px solid rgba(71,85,105,0.5) !important;
+    border-radius: 12px !important;
+    color: #F1F5F9 !important;
+    font-size: 1.3rem !important;
+    font-weight: 900 !important;
+    text-align: center !important;
+}
+
+/* ── 스왑 버튼 ── */
+.swap-col .stButton > button {
+    background: rgba(59,130,246,0.15) !important;
+    border: 2px solid rgba(59,130,246,0.3) !important;
+    border-radius: 50% !important;
+    min-height: 50px !important;
+    font-size: 1.3rem !important;
+    padding: 0 !important;
+    width: 50px !important;
+    color: #60A5FA !important;
+}
+
+/* ── 일반 버튼 ── */
+.stButton > button {
+    background: rgba(30,41,59,0.7) !important;
+    border: 2px solid rgba(71,85,105,0.5) !important;
+    border-radius: 12px !important;
+    color: #CBD5E1 !important;
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+    min-height: 50px !important;
+    transition: all .15s ease;
+}
+.stButton > button:hover {
+    background: rgba(59,130,246,0.12) !important;
+    border-color: rgba(59,130,246,0.4) !important;
+    color: #E2E8F0 !important;
+    transform: translateY(-1px);
+}
+
+/* primary = 선택됨 */
+.stButton > button[data-testid="stBaseButton-primary"] {
+    background: linear-gradient(135deg,#2563EB,#3B82F6) !important;
+    border:2px solid #60A5FA !important;
+    color:#fff !important;
+    box-shadow:0 0 15px rgba(59,130,246,.25);
+}
+
+/* ── CTA 버튼 ── */
+.btn-cta .stButton > button {
+    background: linear-gradient(135deg,#F59E0B,#D97706) !important;
+    border:2px solid #FBBF24 !important;
+    color:#000 !important;
+    font-size:1.4rem !important; font-weight:900 !important;
+    min-height:60px !important; border-radius:14px !important;
+    box-shadow:0 4px 20px rgba(245,158,11,.25);
+}
+.btn-cta .stButton > button:hover {
+    background:linear-gradient(135deg,#D97706,#B45309)!important;
+    box-shadow:0 4px 30px rgba(245,158,11,.45);
+    transform:translateY(-2px);
+}
+.btn-cta .stButton > button:disabled {
+    background:rgba(30,41,59,.5)!important;
+    border-color:rgba(71,85,105,.3)!important;
+    color:#475569!important; box-shadow:none;
+}
+
+/* ── 뒤로 버튼 ── */
+.btn-back .stButton > button {
+    background:transparent!important;
+    border:2px solid rgba(71,85,105,.4)!important;
+    color:#94A3B8!important;
+    min-height:44px!important; font-size:1rem!important;
+}
+
+/* ── 할인 카드 ── */
+.discount-card {
+    background:rgba(30,41,59,.5); border:2px solid rgba(71,85,105,.4);
+    border-radius:16px; padding:1rem; text-align:center;
+    transition:all .15s;
+}
+.discount-card:hover { border-color:rgba(59,130,246,.4); }
+.discount-card.active {
+    border-color:#3B82F6;
+    background:rgba(59,130,246,.1);
+    box-shadow:0 0 20px rgba(59,130,246,.15);
+}
+.dc-icon { font-size:2rem; margin-bottom:0.3rem; }
+.dc-name { font-size:1.1rem; font-weight:800; color:#F1F5F9!important; }
+.dc-rate { font-size:1.3rem; font-weight:900; color:#60A5FA!important; margin:0.2rem 0; }
+.dc-desc { font-size:0.8rem; color:#64748B!important; }
+
+/* ── 결제 요약 ── */
+.price-table {
+    background:rgba(15,23,42,.5);
+    border:1px solid rgba(71,85,105,.3);
+    border-radius:16px; padding:1.2rem 1.5rem;
+    margin:0.8rem 0;
+}
+.price-row {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:0.5rem 0; font-size:1.1rem;
+}
+.price-row.total {
+    border-top:2px solid rgba(71,85,105,.4);
+    margin-top:0.5rem; padding-top:0.8rem;
+    font-size:1.5rem; font-weight:900;
+}
+.price-label { color:#94A3B8!important; font-weight:600; }
+.price-value { color:#F1F5F9!important; font-weight:800; }
+.price-row.total .price-value { color:#F59E0B!important; }
+.price-discount { color:#34D399!important; font-weight:700; }
+
+/* ── 요약 바 ── */
+.summary-bar {
+    background:rgba(59,130,246,.06);
+    border:1px solid rgba(59,130,246,.15);
+    border-radius:12px; padding:0.6rem 1.2rem;
+    margin-bottom:0.8rem; text-align:center;
+    font-size:1.05rem; font-weight:700; color:#94A3B8!important;
+}
+.summary-bar strong { color:#F1F5F9!important; }
+
+/* ── 완료 화면 ── */
+.complete-box {
+    text-align:center; padding:2rem;
+    background:rgba(5,150,105,.06);
+    border:1px solid rgba(16,185,129,.2);
+    border-radius:20px; margin:1rem 0;
+}
+.complete-icon { font-size:4rem; margin-bottom:0.5rem; }
+.complete-title { font-size:2rem; color:#34D399!important; font-weight:900; }
+.complete-detail { font-size:1.1rem; color:#94A3B8!important; margin-top:0.5rem; line-height:1.7; }
+.ticket-box {
+    background:rgba(15,23,42,.6); border:1px dashed rgba(71,85,105,.5);
+    border-radius:14px; padding:1.2rem; margin:1rem auto; max-width:400px;
+}
+.ticket-row {
+    display:flex; justify-content:space-between; padding:0.3rem 0;
+    font-size:1rem;
+}
+.ticket-label { color:#64748B!important; font-weight:600; }
+.ticket-value { color:#F1F5F9!important; font-weight:800; }
+
+/* ── 인원별 할인 행 ── */
+.pax-row {
+    background:rgba(15,23,42,.4);
+    border:1px solid rgba(71,85,105,.25);
+    border-radius:12px;
+    padding:0.5rem 1rem;
+    margin:0.3rem 0;
+}
+.pax-row-label {
+    font-size:0.95rem; font-weight:800; color:#94A3B8!important;
+    display:flex; align-items:center; gap:0.4rem;
+    margin-bottom:0.15rem;
+}
+.pax-row-price {
+    font-size:0.85rem; font-weight:700; color:#60A5FA!important;
+    text-align:right; margin-top:0.2rem;
+}
+
+/* ── 푸터 ── */
+.kiosk-footer {
+    text-align:center; padding:0.5rem 0;
+    font-size:0.8rem; color:#334155!important;
+    margin-top:0.5rem;
+}
+
+/* ── 포커스 ── */
+*:focus-visible { outline:3px solid #60A5FA!important; outline-offset:3px; }
+
+/* ── 스크롤바 숨김 ── */
+::-webkit-scrollbar { width:0; height:0; }
+section.main { overflow:hidden !important; }

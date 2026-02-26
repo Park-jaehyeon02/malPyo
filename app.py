@@ -8,8 +8,14 @@ app.py - 말표(Mal-Pyo) 키오스크 UI
 
 from __future__ import annotations
 
-import time
+import logging
+from pathlib import Path
+
 import streamlit as st
+
+from stt_engine import STTEngine
+
+logger = logging.getLogger("malpyo.app")
 
 # ─────────────────────────────────────────────────────────────
 # 페이지 설정
@@ -49,364 +55,49 @@ PRICE_MAP = {
 }
 DEFAULT_PRICE = 15000
 
-# 페이지별 음성 인식 Mock 데이터
-MOCK_VOICE_BOOKING = {
-    "departure": "서울",
-    "arrival": "전주",
-    "time": "14:00",
-    "passengers": 2,
-    "speech": "서울에서 전주 가는 두시 버스 두 장이요",
-}
+# ─────────────────────────────────────────────────────────────
+# STT 엔진 (세션 간 공유, 1회만 로드)
+# ─────────────────────────────────────────────────────────────
+@st.cache_resource
+def get_stt_engine() -> STTEngine:
+    return STTEngine()
 
-MOCK_VOICE_DISCOUNT = {
-    "discounts": ["child", "senior"],
-    "speech": "한 명은 어린이, 한 명은 경로 할인이요",
-}
 
-MOCK_VOICE_PAYMENT = {
-    "payment": "card",
-    "speech": "카드로 결제할게요",
-}
+def run_stt(audio_bytes: bytes) -> str:
+    """녹음된 WAV 바이트를 STT로 변환하여 텍스트를 반환한다."""
+    try:
+        engine = get_stt_engine()
+        result = engine.transcribe(audio_bytes)
+        return result.text.strip()
+    except Exception as e:
+        logger.error("STT 처리 실패: %s", e)
+        return f"[STT 오류] {e}"
+
 
 # ─────────────────────────────────────────────────────────────
-# CSS
+# CSS (외부 파일 로드)
 # ─────────────────────────────────────────────────────────────
-KIOSK_CSS = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+STATIC_DIR = Path(__file__).parent / "static"
 
-/* ── 리셋 ── */
-header[data-testid="stHeader"], footer, #MainMenu { display:none!important; }
-[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none!important; }
+def load_css():
+    css_path = STATIC_DIR / "kiosk.css"
+    css_text = css_path.read_text(encoding="utf-8")
+    st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
 
-/* ── 배경 ── */
-.stApp {
-    background: linear-gradient(170deg, #0B1120 0%, #111827 50%, #0F172A 100%) !important;
-}
-section.main > div.block-container {
-    padding: 0.5rem 2rem 1rem 2rem !important;
-    max-width: 960px !important;
-}
-
-/* ── 타이포그래피 ── */
-html, body, .stApp, .stApp p, .stApp span, .stApp div, .stApp label {
-    color: #E2E8F0 !important;
-    font-family: 'Noto Sans KR',sans-serif !important;
-}
-
-/* ── 상단 음성 바 (슬림) ── */
-.voice-bar {
-    background: rgba(30,41,59,0.6);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(59,130,246,0.2);
-    border-radius: 16px;
-    padding: 0.6rem 1.2rem;
-    display: flex; align-items: center; gap: 1rem;
-    margin-bottom: 0.6rem;
-}
-.vb-icon {
-    width: 44px; height: 44px; border-radius: 50%;
-    background: linear-gradient(135deg,#3B82F6,#6366F1);
-    display:flex; align-items:center; justify-content:center;
-    font-size:20px; flex-shrink:0;
-    animation: vb-glow 2.5s ease-in-out infinite;
-}
-@keyframes vb-glow {
-    0%,100%{box-shadow:0 0 10px rgba(59,130,246,.2)}
-    50%{box-shadow:0 0 25px rgba(99,102,241,.45)}
-}
-.vb-text { font-size:1.15rem; color:#F1F5F9!important; font-weight:700; }
-.vb-sub { font-size:0.85rem; color:#94A3B8!important; }
-.vb-wave { display:flex; align-items:center; gap:4px; height:30px; }
-.vb-bar {
-    width:4px; border-radius:2px;
-    background:linear-gradient(180deg,#60A5FA,#3B82F6);
-    animation: vb-bounce 1s ease-in-out infinite;
-}
-.vb-bar:nth-child(1){height:8px;animation-delay:0s}
-.vb-bar:nth-child(2){height:14px;animation-delay:.08s}
-.vb-bar:nth-child(3){height:22px;animation-delay:.16s}
-.vb-bar:nth-child(4){height:28px;animation-delay:.24s}
-.vb-bar:nth-child(5){height:22px;animation-delay:.32s}
-.vb-bar:nth-child(6){height:14px;animation-delay:.40s}
-.vb-bar:nth-child(7){height:8px;animation-delay:.48s}
-@keyframes vb-bounce {
-    0%,100%{transform:scaleY(.3);opacity:.4}
-    50%{transform:scaleY(1);opacity:1}
-}
-.vb-bubble {
-    background:rgba(59,130,246,.1); border:1px solid rgba(96,165,250,.25);
-    border-radius:10px; padding:0.3rem 0.8rem; margin-top:0.2rem; display:inline-block;
-}
-.vb-bubble-text { font-size:1.05rem; color:#BFDBFE!important; font-weight:600; }
-.processing-badge {
-    font-size:1.1rem; color:#60A5FA!important; font-weight:700;
-    animation: proc-blink 1.2s infinite;
-}
-@keyframes proc-blink { 0%,100%{opacity:1} 50%{opacity:.2} }
-
-/* ── 메인 카드 (코레일 스타일 예매 영역) ── */
-.booking-card {
-    background: rgba(30,41,59,0.5);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(71,85,105,0.4);
-    border-radius: 20px;
-    padding: 1.6rem 2rem;
-    margin: 0.3rem 0;
-}
-.card-title {
-    font-size: 1.3rem; font-weight: 900; color: #F1F5F9 !important;
-    margin-bottom: 1rem; display:flex; align-items:center; gap:0.5rem;
-}
-.card-title-badge {
-    font-size:0.75rem; background:#3B82F6; color:#fff!important;
-    padding:0.15rem 0.6rem; border-radius:20px; font-weight:700;
-}
-
-/* ── 스텝 인디케이터 ── */
-.steps {
-    display:flex; justify-content:center; gap:0.5rem;
-    margin-bottom:0.8rem;
-}
-.step {
-    display:flex; align-items:center; gap:0.3rem;
-    font-size:0.85rem; font-weight:700; color:#475569!important;
-}
-.step.active { color:#3B82F6!important; }
-.step.done { color:#34D399!important; }
-.step-dot {
-    width:28px; height:28px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center;
-    font-size:0.8rem; font-weight:900;
-    background:rgba(71,85,105,0.4); color:#64748B!important;
-    border:2px solid #334155;
-}
-.step.active .step-dot {
-    background:linear-gradient(135deg,#3B82F6,#2563EB);
-    color:#fff!important; border-color:#60A5FA;
-    box-shadow:0 0 12px rgba(59,130,246,.3);
-}
-.step.done .step-dot {
-    background:#059669; color:#fff!important; border-color:#34D399;
-}
-.step-line {
-    width:40px; height:2px; background:#334155;
-    margin:0 0.2rem; border-radius:1px;
-}
-.step-line.done { background:#059669; }
-.step-line.active { background:#3B82F6; }
-
-/* ── 폼 라벨 ── */
-.field-label {
-    font-size:0.9rem; font-weight:700; color:#94A3B8!important;
-    margin-bottom:0.2rem; letter-spacing:0.03em;
-}
-
-/* ── Selectbox 오버라이드 ── */
-.stSelectbox > div > div {
-    background: rgba(15,23,42,0.8) !important;
-    border: 2px solid rgba(71,85,105,0.5) !important;
-    border-radius: 12px !important;
-    color: #F1F5F9 !important;
-    font-size: 1.2rem !important;
-    font-weight: 700 !important;
-    min-height: 50px !important;
-}
-.stSelectbox > div > div:hover {
-    border-color: rgba(59,130,246,0.5) !important;
-}
-.stSelectbox label { display:none !important; }
-
-/* ── Number Input 오버라이드 ── */
-.stNumberInput > div > div > input {
-    background: rgba(15,23,42,0.8) !important;
-    border: 2px solid rgba(71,85,105,0.5) !important;
-    border-radius: 12px !important;
-    color: #F1F5F9 !important;
-    font-size: 1.3rem !important;
-    font-weight: 900 !important;
-    text-align: center !important;
-}
-
-/* ── 스왑 버튼 ── */
-.swap-col .stButton > button {
-    background: rgba(59,130,246,0.15) !important;
-    border: 2px solid rgba(59,130,246,0.3) !important;
-    border-radius: 50% !important;
-    min-height: 50px !important;
-    font-size: 1.3rem !important;
-    padding: 0 !important;
-    width: 50px !important;
-    color: #60A5FA !important;
-}
-
-/* ── 일반 버튼 ── */
-.stButton > button {
-    background: rgba(30,41,59,0.7) !important;
-    border: 2px solid rgba(71,85,105,0.5) !important;
-    border-radius: 12px !important;
-    color: #CBD5E1 !important;
-    font-size: 1.15rem !important;
-    font-weight: 700 !important;
-    min-height: 50px !important;
-    transition: all .15s ease;
-}
-.stButton > button:hover {
-    background: rgba(59,130,246,0.12) !important;
-    border-color: rgba(59,130,246,0.4) !important;
-    color: #E2E8F0 !important;
-    transform: translateY(-1px);
-}
-
-/* primary = 선택됨 */
-.stButton > button[data-testid="stBaseButton-primary"] {
-    background: linear-gradient(135deg,#2563EB,#3B82F6) !important;
-    border:2px solid #60A5FA !important;
-    color:#fff !important;
-    box-shadow:0 0 15px rgba(59,130,246,.25);
-}
-
-/* ── CTA 버튼 ── */
-.btn-cta .stButton > button {
-    background: linear-gradient(135deg,#F59E0B,#D97706) !important;
-    border:2px solid #FBBF24 !important;
-    color:#000 !important;
-    font-size:1.4rem !important; font-weight:900 !important;
-    min-height:60px !important; border-radius:14px !important;
-    box-shadow:0 4px 20px rgba(245,158,11,.25);
-}
-.btn-cta .stButton > button:hover {
-    background:linear-gradient(135deg,#D97706,#B45309)!important;
-    box-shadow:0 4px 30px rgba(245,158,11,.45);
-    transform:translateY(-2px);
-}
-.btn-cta .stButton > button:disabled {
-    background:rgba(30,41,59,.5)!important;
-    border-color:rgba(71,85,105,.3)!important;
-    color:#475569!important; box-shadow:none;
-}
-
-/* ── 뒤로 버튼 ── */
-.btn-back .stButton > button {
-    background:transparent!important;
-    border:2px solid rgba(71,85,105,.4)!important;
-    color:#94A3B8!important;
-    min-height:44px!important; font-size:1rem!important;
-}
-
-/* ── 할인 카드 ── */
-.discount-card {
-    background:rgba(30,41,59,.5); border:2px solid rgba(71,85,105,.4);
-    border-radius:16px; padding:1rem; text-align:center;
-    transition:all .15s;
-}
-.discount-card:hover { border-color:rgba(59,130,246,.4); }
-.discount-card.active {
-    border-color:#3B82F6;
-    background:rgba(59,130,246,.1);
-    box-shadow:0 0 20px rgba(59,130,246,.15);
-}
-.dc-icon { font-size:2rem; margin-bottom:0.3rem; }
-.dc-name { font-size:1.1rem; font-weight:800; color:#F1F5F9!important; }
-.dc-rate { font-size:1.3rem; font-weight:900; color:#60A5FA!important; margin:0.2rem 0; }
-.dc-desc { font-size:0.8rem; color:#64748B!important; }
-
-/* ── 결제 요약 ── */
-.price-table {
-    background:rgba(15,23,42,.5);
-    border:1px solid rgba(71,85,105,.3);
-    border-radius:16px; padding:1.2rem 1.5rem;
-    margin:0.8rem 0;
-}
-.price-row {
-    display:flex; justify-content:space-between; align-items:center;
-    padding:0.5rem 0; font-size:1.1rem;
-}
-.price-row.total {
-    border-top:2px solid rgba(71,85,105,.4);
-    margin-top:0.5rem; padding-top:0.8rem;
-    font-size:1.5rem; font-weight:900;
-}
-.price-label { color:#94A3B8!important; font-weight:600; }
-.price-value { color:#F1F5F9!important; font-weight:800; }
-.price-row.total .price-value { color:#F59E0B!important; }
-.price-discount { color:#34D399!important; font-weight:700; }
-
-/* ── 요약 바 ── */
-.summary-bar {
-    background:rgba(59,130,246,.06);
-    border:1px solid rgba(59,130,246,.15);
-    border-radius:12px; padding:0.6rem 1.2rem;
-    margin-bottom:0.8rem; text-align:center;
-    font-size:1.05rem; font-weight:700; color:#94A3B8!important;
-}
-.summary-bar strong { color:#F1F5F9!important; }
-
-/* ── 완료 화면 ── */
-.complete-box {
-    text-align:center; padding:2rem;
-    background:rgba(5,150,105,.06);
-    border:1px solid rgba(16,185,129,.2);
-    border-radius:20px; margin:1rem 0;
-}
-.complete-icon { font-size:4rem; margin-bottom:0.5rem; }
-.complete-title { font-size:2rem; color:#34D399!important; font-weight:900; }
-.complete-detail { font-size:1.1rem; color:#94A3B8!important; margin-top:0.5rem; line-height:1.7; }
-.ticket-box {
-    background:rgba(15,23,42,.6); border:1px dashed rgba(71,85,105,.5);
-    border-radius:14px; padding:1.2rem; margin:1rem auto; max-width:400px;
-}
-.ticket-row {
-    display:flex; justify-content:space-between; padding:0.3rem 0;
-    font-size:1rem;
-}
-.ticket-label { color:#64748B!important; font-weight:600; }
-.ticket-value { color:#F1F5F9!important; font-weight:800; }
-
-/* ── 인원별 할인 행 ── */
-.pax-row {
-    background:rgba(15,23,42,.4);
-    border:1px solid rgba(71,85,105,.25);
-    border-radius:12px;
-    padding:0.5rem 1rem;
-    margin:0.3rem 0;
-}
-.pax-row-label {
-    font-size:0.95rem; font-weight:800; color:#94A3B8!important;
-    display:flex; align-items:center; gap:0.4rem;
-    margin-bottom:0.15rem;
-}
-.pax-row-price {
-    font-size:0.85rem; font-weight:700; color:#60A5FA!important;
-    text-align:right; margin-top:0.2rem;
-}
-
-/* ── 푸터 ── */
-.kiosk-footer {
-    text-align:center; padding:0.5rem 0;
-    font-size:0.8rem; color:#334155!important;
-    margin-top:0.5rem;
-}
-
-/* ── 포커스 ── */
-*:focus-visible { outline:3px solid #60A5FA!important; outline-offset:3px; }
-
-/* ── 스크롤바 숨김 ── */
-::-webkit-scrollbar { width:0; height:0; }
-section.main { overflow:hidden !important; }
-</style>
-"""
-
-st.markdown(KIOSK_CSS, unsafe_allow_html=True)
+load_css()
 
 
 # ─────────────────────────────────────────────────────────────
 # 세션 상태
 # ─────────────────────────────────────────────────────────────
 VOICE_IDLE = "idle"
-VOICE_LISTENING = "listening"
 VOICE_PROCESSING = "processing"
 VOICE_DONE = "done"
+
+# 모드
+MODE_SELECT = "select"       # 시작 화면 (모드 선택)
+MODE_CLASSIC = "classic"     # 기존 모드 (수동 선택만)
+MODE_VOICE = "voice"         # 대화형 모드 (음성 + 수동)
 
 PAGE_BOOKING = "booking"
 PAGE_DISCOUNT = "discount"
@@ -414,6 +105,7 @@ PAGE_PAYMENT = "payment"
 PAGE_COMPLETE = "complete"
 
 DEFAULTS: dict = {
+    "mode": MODE_SELECT,      # 현재 모드
     "voice_phase": VOICE_IDLE,
     "recognized_text": "",
     "page": PAGE_BOOKING,
@@ -481,9 +173,11 @@ def can_proceed_booking() -> bool:
 # ─────────────────────────────────────────────────────────────
 # 핸들러
 # ─────────────────────────────────────────────────────────────
-def handle_mic_click():
-    st.session_state.voice_phase = VOICE_LISTENING
+def handle_voice_reset():
+    """음성 바를 초기 상태로 되돌린다."""
+    st.session_state.voice_phase = VOICE_IDLE
     st.session_state.recognized_text = ""
+    st.session_state.widget_key_version += 1
 
 
 def handle_swap():
@@ -504,9 +198,84 @@ def handle_select_payment(payment_id: str):
     st.session_state.sel_payment = payment_id
 
 
+def handle_select_mode(mode: str):
+    st.session_state.mode = mode
+    st.session_state.page = PAGE_BOOKING
+
+
 def handle_reset():
     for k, v in DEFAULTS.items():
         st.session_state[k] = v if not isinstance(v, list) else v.copy()
+
+
+# ─────────────────────────────────────────────────────────────
+# 시작 화면 (모드 선택)
+# ─────────────────────────────────────────────────────────────
+def render_mode_select():
+    st.markdown(
+        """<div style="text-align:center;padding:2rem 0 1rem">
+        <div style="font-size:3.5rem;margin-bottom:0.5rem">🐴</div>
+        <div style="font-size:2.2rem;font-weight:900;color:#F8FAFC;margin-bottom:0.3rem">말표 Mal-Pyo</div>
+        <div style="font-size:1.1rem;color:#94A3B8">음성 기반 교통 예매 키오스크</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """<div style="text-align:center;margin:1.5rem 0 2rem;color:#CBD5E1;font-size:1rem">
+        이용 방식을 선택해 주세요
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    _, col_classic, col_voice, _ = st.columns([1, 2, 2, 1])
+
+    with col_classic:
+        st.markdown(
+            """<div class="booking-card" style="text-align:center;padding:2rem 1rem;min-height:220px">
+            <div style="font-size:3rem;margin-bottom:0.8rem">🖱️</div>
+            <div style="font-size:1.3rem;font-weight:700;color:#F8FAFC;margin-bottom:0.5rem">기존 모드</div>
+            <div style="font-size:0.9rem;color:#94A3B8;line-height:1.5">
+            화면을 터치하여<br>직접 선택합니다
+            </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+        st.button(
+            "🖱️  기존 모드로 시작",
+            key="btn_mode_classic",
+            on_click=handle_select_mode,
+            args=(MODE_CLASSIC,),
+            use_container_width=True,
+        )
+
+    with col_voice:
+        st.markdown(
+            """<div class="booking-card" style="text-align:center;padding:2rem 1rem;min-height:220px">
+            <div style="font-size:3rem;margin-bottom:0.8rem">🎤</div>
+            <div style="font-size:1.3rem;font-weight:700;color:#F8FAFC;margin-bottom:0.5rem">대화형 모드</div>
+            <div style="font-size:0.9rem;color:#94A3B8;line-height:1.5">
+            음성으로 말하면<br>자동으로 입력됩니다
+            </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+        st.button(
+            "🎤  대화형 모드로 시작",
+            key="btn_mode_voice",
+            on_click=handle_select_mode,
+            args=(MODE_VOICE,),
+            use_container_width=True,
+            type="primary",
+        )
+
+    st.markdown(
+        """<div style="text-align:center;margin-top:2rem;padding:1rem;
+        background:rgba(59,130,246,0.1);border-radius:12px;border:1px solid rgba(59,130,246,0.3)">
+        <div style="font-size:0.95rem;color:#60A5FA">💡 대화형 모드에서도 화면 터치로 직접 선택할 수 있습니다</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -552,84 +321,51 @@ def get_voice_guide() -> tuple[str, str]:
     return "말씀만 하세요", "음성으로 입력할 수 있어요"
 
 
-def process_voice_result():
-    """현재 페이지에 맞게 음성 인식 결과를 처리한다."""
-    page = st.session_state.page
-
-    # 위젯 키 버전 증가 → 위젯이 새로 생성되어 새 값 반영
+def process_voice_result(audio_bytes: bytes):
+    """녹음된 오디오를 STT로 변환하고 인식 결과를 세션에 저장한다."""
+    recognized = run_stt(audio_bytes)
+    st.session_state.recognized_text = recognized
     st.session_state.widget_key_version += 1
-
-    if page == PAGE_BOOKING:
-        m = MOCK_VOICE_BOOKING
-        st.session_state.recognized_text = m["speech"]
-        st.session_state.sel_departure = m["departure"]
-        st.session_state.sel_arrival = m["arrival"]
-        st.session_state.sel_time = m["time"]
-        st.session_state.sel_passengers = m["passengers"]
-        # 인원 수에 맞게 할인 리스트 초기화 (기본값: 일반)
-        st.session_state.sel_discounts = ["normal"] * m["passengers"]
-
-    elif page == PAGE_DISCOUNT:
-        m = MOCK_VOICE_DISCOUNT
-        st.session_state.recognized_text = m["speech"]
-        pax = st.session_state.sel_passengers
-        discounts = m["discounts"]
-        # 인원 수에 맞게 할인 적용 (부족하면 normal로 채움)
-        st.session_state.sel_discounts = (discounts + ["normal"] * pax)[:pax]
-
-    elif page == PAGE_PAYMENT:
-        m = MOCK_VOICE_PAYMENT
-        st.session_state.recognized_text = m["speech"]
-        st.session_state.sel_payment = m["payment"]
 
 
 def render_voice_bar():
     phase = st.session_state.voice_phase
-    page = st.session_state.page
+    v = st.session_state.widget_key_version
     guide_title, guide_sub = get_voice_guide()
 
-    # 버튼 라벨
-    btn_label_map = {
-        PAGE_BOOKING: "🎤 음성 예매",
-        PAGE_DISCOUNT: "🎤 음성 할인",
-        PAGE_PAYMENT: "🎤 음성 결제",
-    }
-    btn_label = btn_label_map.get(page, "🎤 음성 입력")
-
     if phase == VOICE_IDLE:
-        col_bar, col_btn = st.columns([5, 2])
-        with col_bar:
+        col_guide, col_rec = st.columns([3, 4])
+        with col_guide:
             st.markdown(
                 f"""<div class="voice-bar"><div class="vb-icon">🎤</div>
                 <div><div class="vb-text">{guide_title}</div>
                 <div class="vb-sub">{guide_sub}</div></div></div>""",
                 unsafe_allow_html=True,
             )
-        with col_btn:
-            st.markdown("<div style='padding-top:0.3rem'></div>", unsafe_allow_html=True)
-            st.button(btn_label, on_click=handle_mic_click, key="btn_mic", use_container_width=True)
+        with col_rec:
+            audio_data = st.audio_input(
+                "음성을 녹음하세요",
+                key=f"audio_rec_{v}",
+                label_visibility="collapsed",
+            )
+            if audio_data is not None:
+                st.session_state._pending_audio = audio_data.getvalue()
+                st.session_state.voice_phase = VOICE_PROCESSING
+                st.rerun()
 
-    elif phase == VOICE_LISTENING:
+    elif phase == VOICE_PROCESSING:
         st.markdown(
             """<div class="voice-bar"><div class="vb-icon">🎤</div>
             <div class="vb-wave"><div class="vb-bar"></div><div class="vb-bar"></div>
             <div class="vb-bar"></div><div class="vb-bar"></div><div class="vb-bar"></div>
             <div class="vb-bar"></div><div class="vb-bar"></div></div>
-            <div class="vb-text">듣고 있습니다...</div></div>""",
-            unsafe_allow_html=True,
-        )
-        time.sleep(2)
-        st.session_state.voice_phase = VOICE_PROCESSING
-        st.rerun()
-
-    elif phase == VOICE_PROCESSING:
-        st.markdown(
-            """<div class="voice-bar"><div class="vb-icon">🎤</div>
             <div class="processing-badge">🔄 알아듣는 중...</div></div>""",
             unsafe_allow_html=True,
         )
-        time.sleep(1.5)
-        process_voice_result()
+        audio_bytes = st.session_state.get("_pending_audio")
+        if audio_bytes:
+            process_voice_result(audio_bytes)
+            st.session_state._pending_audio = None
         st.session_state.voice_phase = VOICE_DONE
         st.rerun()
 
@@ -645,7 +381,7 @@ def render_voice_bar():
             )
         with col_btn:
             st.markdown("<div style='padding-top:0.3rem'></div>", unsafe_allow_html=True)
-            st.button("🎤 다시 말하기", on_click=handle_mic_click, key="btn_mic_r", use_container_width=True)
+            st.button("🎤 다시 말하기", on_click=handle_voice_reset, key="btn_mic_r", use_container_width=True)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -957,12 +693,24 @@ def render_page_complete():
 # 메인
 # ─────────────────────────────────────────────────────────────
 def main():
+    mode = st.session_state.mode
     page = st.session_state.page
 
-    if page != PAGE_COMPLETE:
+    # 모드 선택 화면
+    if mode == MODE_SELECT:
+        render_mode_select()
+        st.markdown('<div class="kiosk-footer">말표 Mal-Pyo · 음성 키오스크</div>', unsafe_allow_html=True)
+        return
+
+    # 대화형 모드: 음성 바 표시 (완료 페이지 제외)
+    if mode == MODE_VOICE and page != PAGE_COMPLETE:
         render_voice_bar()
+
+    # 스텝 인디케이터 (완료 페이지 제외)
+    if page != PAGE_COMPLETE:
         render_steps()
 
+    # 페이지별 렌더링
     if page == PAGE_BOOKING:
         render_page_booking()
     elif page == PAGE_DISCOUNT:
@@ -972,7 +720,9 @@ def main():
     elif page == PAGE_COMPLETE:
         render_page_complete()
 
-    st.markdown('<div class="kiosk-footer">말표 Mal-Pyo · 음성 키오스크</div>', unsafe_allow_html=True)
+    # 푸터
+    mode_label = "대화형 모드" if mode == MODE_VOICE else "기존 모드"
+    st.markdown(f'<div class="kiosk-footer">말표 Mal-Pyo · {mode_label}</div>', unsafe_allow_html=True)
 
 
 main()
