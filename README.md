@@ -54,37 +54,44 @@
 ## 아키텍처
 
 ```
-┌──────────────────────────────────────────────────┐
-│                 app.py (View/Controller)         │
-│                    UI                            │
-│     마이크 입력 ─── 채팅 UI ─── 음성 자동재생        │
-└────────────────────┬─────────────────────────────┘
-                     │
-┌────────────────────▼─────────────────────────────┐
-│               engine.py (Model)                  │
-│                                                  │
-│  ┌──────────────┐ ┌──────────┐ ┌───────────────┐ │
-│  │ STT Engine   │ │LLM Engine│ │  TTS Engine   │ │
-│  │faster-whisper│ │          │ │  MeloTTS      │ │
-│  │ Large-v3-    │ │          │ │               │ │
-│  │  turbo       │ │ Ollama   │ │  pyttsx3      │ │
-│  │ (GPU/CUDA)   │ │ llama-cpp│ │  (폴백) ㅁ     │ │
-│  └──────────────┘ └──────────┘ └───────────────┘ │
-└──────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                    app.py (UI)                      │
+│      Mic Input --- Kiosk UI --- Voice Playback      │
+└──────────────────────────┬──────────────────────────┘
+                           │ audio_bytes + page
+┌──────────────────────────▼──────────────────────────┐
+│              engine.py (Orchestrator)               │
+│                                                     │
+│  ┌──────────────┐ ┌─────────────┐ ┌──────────────┐  │
+│  │stt_engine.py │ │llm_engine.py│ │tts_engine.py │  │
+│  │              │ │             │ │              │  │
+│  │faster-whisper│ │   Ollama    │ │   pyttsx3    │  │
+│  │ Large-v3-    │ │ Structured  │ │  WAV Audio   │  │
+│  │  turbo       │ │ JSON Parse  │ │  Synthesis   │  │
+│  │ (GPU/CUDA)   │ │             │ │              │  │
+│  └──────┬───────┘ └──────┬──────┘ └──────┬───────┘  │
+│         │ text           │ JSON+reply    │ WAV      │
+└─────────┼────────────────┼───────────────┼──────────┘
+          └────────────────┴───────────────┘
+                           │ PipelineResult
+┌──────────────────────────▼──────────────────────────┐
+│                    app.py (UI)                      │
+│     Auto-fill Form + Show Reply + Play Audio        │
+└─────────────────────────────────────────────────────┘
 ```
 
-### 음성 대화 흐름
+### Voice Pipeline Flow
 
 ```
-🎤 마이크 입력
+🎤 Mic Record (st.audio_input)
     ↓
-📝 STT (faster-whisper, GPU) → 텍스트 변환
+📝 stt_engine.py (faster-whisper, GPU) → Text
     ↓
-🧠 LLM (GPT-4o / 로컬 LLM) → 의도 파악 & 응답 생성
+🧠 llm_engine.py (Ollama) → Structured JSON + Reply
     ↓
-🔊 TTS (MeloTTS, GPU) → 음성 합성
+🔊 tts_engine.py (pyttsx3) → Voice Synthesis
     ↓
-🔈 자동 재생 → 사용자에게 음성 전달
+🔈 app.py → Auto-fill Form + Voice Playback
 ```
 
 ---
@@ -92,15 +99,13 @@
 ## 기술 스택
 
 
-| 구성요소         | 기술                              | 비고              |
-| ------------ | ------------------------------- | --------------- |
-| **STT**      | faster-whisper (Large-v3-turbo) | GPU float16 추론  |
-| **TTS (주)**  | MeloTTS                         | 한국어 GPU 음성 합성   |
-| **TTS (폴백)** | pyttsx3                         | 완전 오프라인         |
-| **LLM (기본)** | OpenAI GPT-4o                   | 클라우드 (추후 교체 가능) |
-| **LLM (로컬)** | Ollama / llama-cpp-python       | Llama-3 등       |
-| **UI**       | Streamlit                       | 고대비 배리어프리       |
-| **GPU**      | NVIDIA RTX 5080                 | CUDA 12.x       |
+| 구성요소    | 기술                              | 비고                |
+| -------- | ------------------------------- | ----------------- |
+| **STT**  | faster-whisper (Large-v3-turbo) | GPU float16 추론    |
+| **LLM**  | Ollama                          | 로컬 서버, JSON 파싱   |
+| **TTS**  | pyttsx3                         | 오프라인 음성 합성       |
+| **UI**   | Streamlit                       | 고대비 키오스크 UI      |
+| **GPU**  | NVIDIA RTX 5080                 | CUDA 12.x        |   
 
 
 ---
@@ -111,19 +116,9 @@
 
 - Python 3.10 이상
 - NVIDIA GPU + CUDA 12.x + cuDNN 9.x
-- (선택) Ollama — 로컬 LLM 사용 시
+- Ollama 설치 및 모델 다운로드
 
-### 1. 자동 설치 (권장)
-
-```bash
-# Windows
-setup_env.bat
-
-# Linux / macOS
-chmod +x setup_env.sh && ./setup_env.sh
-```
-
-### 2. 수동 설치
+### 설치
 
 ```bash
 # 가상환경 생성
@@ -131,22 +126,8 @@ python -m venv .venv
 .venv\Scripts\activate  # Windows
 # source .venv/bin/activate  # Linux/macOS
 
-# 기본 패키지 설치
+# 패키지 설치
 pip install -r requirements.txt
-
-# MeloTTS 설치 (GPU 음성 합성)
-pip install git+https://github.com/myshell-ai/MeloTTS.git
-
-# (선택) llama-cpp-python GPU 빌드
-set CMAKE_ARGS=-DGGML_CUDA=on
-pip install llama-cpp-python
-```
-
-### 3. 환경 변수 설정
-
-```bash
-cp .env.example .env
-# .env 파일을 편집하여 API 키를 입력하세요
 ```
 
 ---
@@ -158,14 +139,14 @@ cp .env.example .env
 streamlit run app.py
 ```
 
-브라우저에서 `http://localhost:8501` 로 접속합니다.
+브라우저에서 `http://localhost:8502` 로 접속합니다.
 
 ### 사용법
 
-1. 사이드바에서 원하는 엔진(TTS, LLM, GPU/CPU)을 선택합니다.
-2. **"엔진 시작"** 버튼을 클릭합니다.
-3. 마이크 버튼을 눌러 음성으로 질문합니다.
-4. AI가 음성으로 답변합니다 (자동 재생).
+1. 첫 화면에서 **"기존 모드"** 또는 **"대화형 모드"**를 선택합니다.
+2. 대화형 모드: 음성 바의 마이크 아이콘을 눌러 말합니다.
+3. AI가 음성을 인식하고, 예매 정보를 자동으로 채운 뒤 음성으로 답변합니다.
+4. 기존 모드: 직접 터치/클릭으로 예매를 진행합니다.
 
 ---
 
@@ -173,35 +154,28 @@ streamlit run app.py
 
 ```
 malPyo/
-├── app.py              # Streamlit UI (View/Controller)
-├── engine.py           # AI 엔진 (STT/TTS/LLM Model)
+├── app.py              # Streamlit UI (키오스크 View/Controller)
+├── engine.py           # 파이프라인 오케스트레이터 (STT→LLM→TTS)
+├── stt_engine.py       # STT 엔진 (faster-whisper)
+├── llm_engine.py       # LLM 엔진 (Ollama, 구조화 JSON)
+├── tts_engine.py       # TTS 엔진 (pyttsx3)
+├── static/
+│   └── kiosk.css       # 키오스크 UI 스타일시트
+├── .streamlit/
+│   └── config.toml     # Streamlit 서버 설정 (포트 8502)
 ├── requirements.txt    # Python 의존성
-├── setup_env.bat       # Windows 자동 설치 스크립트
-├── setup_env.sh        # Linux/macOS 자동 설치 스크립트
-├── .env.example        # 환경변수 템플릿
 └── README.md           # 프로젝트 문서 (현재 파일)
 ```
 
 ---
 
-## 로컬 LLM 전환 가이드
-
-GPT-4o 대신 완전 로컬 LLM을 사용하려면:
-
-### Ollama 방식 (권장)
+## Ollama 설정
 
 ```bash
 # Ollama 설치: https://ollama.ai
 ollama pull llama3:8b
 
-# app.py 사이드바에서 LLM을 "Ollama (로컬 서버)"로 변경
-```
-
-### llama-cpp-python 방식
-
-```bash
-# GGUF 모델 다운로드 후 경로 지정
-# engine.py에서 LocalLLMEngine(backend="llama_cpp", model_path="./model.gguf")
+# Ollama 서버가 http://localhost:11434 에서 실행 중이어야 합니다.
 ```
 
 ---
